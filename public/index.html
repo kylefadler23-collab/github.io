@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AegisCam - Smart Security & Global WebRTC Camera</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PeerJS Global Internet WebRTC Library -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Remote View PIN & Camera ID Authorization Overlay (for Remote Mode) -->
+  <div id="pinModal" class="modal-overlay hidden">
+    <div class="glass-card modal-box pin-box">
+      <div class="icon-circle cyan-glow">
+        <i data-lucide="globe"></i>
+      </div>
+      <h2>AegisCam Global Remote Access</h2>
+      <p>Enter the <strong>Global Camera ID</strong> (or Security PIN) to connect from anywhere on the internet.</p>
+      
+      <div class="pin-input-group">
+        <input type="text" id="camIdInput" value="123456cam123456cam" placeholder="123456cam123456cam" autocomplete="off" autofocus style="font-size: 16px; letter-spacing: 2px;">
+      </div>
+      <div id="pinError" class="error-msg hidden">Connection failed. Ensure host camera is online.</div>
+
+      <button id="btnConnectRemote" class="btn btn-primary btn-block">
+        <i data-lucide="wifi"></i> Connect Global Camera Stream
+      </button>
+    </div>
+  </div>
+
+  <!-- Video Clip Player Modal -->
+  <div id="playerModal" class="modal-overlay hidden">
+    <div class="glass-card modal-box player-modal-box">
+      <div class="modal-header">
+        <h3 id="playerTitle"><i data-lucide="video"></i> Security Recording Playback</h3>
+        <button id="btnClosePlayer" class="btn-icon"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="video-wrapper">
+          <video id="clipVideoPlayer" controls autoplay></video>
+        </div>
+        <div class="clip-details-bar">
+          <div class="meta-item"><span class="label">Trigger:</span> <span id="playerTrigger" class="badge">Motion</span></div>
+          <div class="meta-item"><span class="label">Timestamp:</span> <span id="playerTime">2026-08-05 21:00</span></div>
+          <div class="meta-item"><span class="label">Duration:</span> <span id="playerDuration">00:15</span></div>
+          <div class="meta-item"><span class="label">Size:</span> <span id="playerSize">4.2 MB</span></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a id="btnDownloadClip" class="btn btn-primary" download="security-clip.webm">
+          <i data-lucide="download"></i> Download Video File
+        </a>
+        <button id="btnDeleteClipModal" class="btn btn-danger">
+          <i data-lucide="trash-2"></i> Delete Clip
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="app-layout">
+
+    <!-- TOP HEADER -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-shield">
+          <i data-lucide="shield"></i>
+          <span class="pulse-ring"></span>
+        </div>
+        <div class="brand-text">
+          <h1>AEGIS<span>CAM</span></h1>
+          <span class="subtitle">AI Motion & Global Security Command</span>
+        </div>
+      </div>
+
+      <!-- Live System Status Badge -->
+      <div class="header-status">
+        <div id="systemStatusBadge" class="status-pill status-ready">
+          <span class="status-dot"></span>
+          <span id="statusText">GLOBAL ONLINE</span>
+        </div>
+        <div id="recordingStatusPill" class="status-pill status-rec hidden">
+          <span class="rec-dot"></span>
+          <span id="recTimeText">REC 00:00</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" id="mainNavTabs">
+        <button class="nav-btn active" data-tab="tabLive">
+          <i data-lucide="camera"></i> <span>Live Monitor</span>
+        </button>
+        <button class="nav-btn" data-tab="tabSettings">
+          <i data-lucide="sliders"></i> <span>Detection Rules</span>
+        </button>
+        <button class="nav-btn" data-tab="tabClips">
+          <i data-lucide="film"></i> <span>Clips Library</span>
+          <span id="clipCountBadge" class="nav-badge">0</span>
+        </button>
+        <button class="nav-btn" data-tab="tabRemote">
+          <i data-lucide="globe"></i> <span>Internet Remote</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- CONTENT BODY -->
+    <main class="app-content">
+
+      <!-- TAB 1: LIVE MONITOR -->
+      <section id="tabLive" class="tab-pane active">
+        <div class="monitor-grid">
+
+          <!-- Main Camera View Window -->
+          <div class="glass-card monitor-card">
+            <div class="cctv-hud-header">
+              <div class="cctv-cam-id"><i data-lucide="dot"></i> CAM-01</div>
+              
+              <!-- CAMERA DEVICE DROPDOWN SELECTOR -->
+              <div class="cam-select-box">
+                <i data-lucide="camera"></i>
+                <select id="selectCamDevice" class="select-input-hud">
+                  <option value="">Detecting Cameras...</option>
+                </select>
+                <button id="btnRefreshCamList" class="btn-icon-hud" title="Refresh Camera Devices">
+                  <i data-lucide="rotate-cw"></i>
+                </button>
+              </div>
+
+              <div class="cctv-timestamp" id="hudClock">2026-08-05 21:00:00</div>
+              <div class="cctv-resolution" id="hudRes">1920x1080 @ 30fps</div>
+            </div>
+
+            <div class="cctv-viewport" id="viewportContainer">
+              <!-- Raw Video (Hidden source for canvas processing) -->
+              <video id="webcamVideo" autoplay playsinline muted class="hidden-video"></video>
+              <!-- Processing Canvas (HUD + Bounding Boxes + Night Vision) -->
+              <canvas id="cctvCanvas"></canvas>
+
+              <!-- CCTV Reticle HUD Overlays -->
+              <div class="cctv-overlay-grid"></div>
+              <div class="cctv-corners">
+                <span class="tl"></span><span class="tr"></span>
+                <span class="bl"></span><span class="br"></span>
+              </div>
+              
+              <!-- Motion Alert Banner Overlay -->
+              <div id="motionAlertBanner" class="motion-banner hidden">
+                <i data-lucide="alert-triangle"></i> MOTION DETECTED
+              </div>
+
+              <!-- Quick Control Floating Bar -->
+              <div class="floating-controls">
+                <button id="btnToggleRecord" class="btn-control btn-rec" title="Toggle Recording">
+                  <i data-lucide="disc"></i> <span id="recBtnLabel">RECORD</span>
+                </button>
+                <button id="btnSnapshot" class="btn-control" title="Take Snapshot Photo">
+                  <i data-lucide="aperture"></i> <span>PHOTO</span>
+                </button>
+                <button id="btnNightVision" class="btn-control" title="Toggle Night Vision Mode">
+                  <i data-lucide="eye"></i> <span>NIGHT VISION</span>
+                </button>
+                <button id="btnTriggerSiren" class="btn-control btn-warning" title="Sound Siren Alarm">
+                  <i data-lucide="bell-ring"></i> <span>SIREN</span>
+                </button>
+                <button id="btnAudioToggle" class="btn-control" title="Toggle Audio Monitor">
+                  <i data-lucide="mic"></i> <span id="audioBtnLabel">MIC ON</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Activity Gauges & Graph -->
+            <div class="monitor-footer-stats">
+              <div class="stat-gauge-group">
+                <div class="stat-gauge-header">
+                  <span><i data-lucide="activity"></i> Motion Activity Level</span>
+                  <span id="motionPercentVal">0%</span>
+                </div>
+                <div class="meter-bar-track">
+                  <div id="motionMeterFill" class="meter-bar-fill" style="width: 0%;"></div>
+                  <div id="motionThresholdLine" class="meter-threshold-marker" style="left: 25%;"></div>
+                </div>
+              </div>
+
+              <div class="stat-gauge-group">
+                <div class="stat-gauge-header">
+                  <span><i data-lucide="volume-2"></i> Audio Volume Noise</span>
+                  <span id="audioDbVal">0 dB</span>
+                </div>
+                <div class="meter-bar-track">
+                  <div id="audioMeterFill" class="meter-bar-fill audio-fill" style="width: 0%;"></div>
+                  <div id="audioThresholdLine" class="meter-threshold-marker" style="left: 40%;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar Activity & Event Log -->
+          <div class="glass-card side-activity-card">
+            <div class="card-header">
+              <h3><i data-lucide="list-tree"></i> Security Event Log</h3>
+              <button id="btnClearLogs" class="btn-icon-small" title="Clear Logs"><i data-lucide="trash"></i></button>
+            </div>
+            
+            <!-- Realtime Line Graph of Motion over time -->
+            <div class="graph-container">
+              <div class="graph-title">Motion Intensity Timeline (60s)</div>
+              <canvas id="motionGraphCanvas" height="90"></canvas>
+            </div>
+
+            <!-- Event Feed List -->
+            <div class="event-feed-list" id="eventFeedList">
+              <div class="event-item system">
+                <i data-lucide="info"></i>
+                <div class="event-details">
+                  <span class="event-msg">Global WebRTC camera system initialized</span>
+                  <span class="event-time">Just now</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- TAB 2: SETTINGS & DETECTION RULES -->
+      <section id="tabSettings" class="tab-pane">
+        <div class="settings-grid">
+          
+          <div class="glass-card settings-card">
+            <div class="card-header">
+              <h3><i data-lucide="sliders"></i> Motion Detection Sensitivity</h3>
+            </div>
+            <div class="settings-body">
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Motion Trigger Threshold</strong>
+                  <p>Minimum pixel motion percentage required to trigger an alert/recording.</p>
+                </div>
+                <div class="setting-control">
+                  <input type="range" id="inputMotionSensitivity" min="1" max="80" value="15">
+                  <span class="range-val" id="valMotionSensitivity">15%</span>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Pixel Color Sensitivity</strong>
+                  <p>Threshold for individual pixel color change (lower values catch fine movement).</p>
+                </div>
+                <div class="setting-control">
+                  <input type="range" id="inputPixelDiffThreshold" min="10" max="100" value="35">
+                  <span class="range-val" id="valPixelDiffThreshold">35</span>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Draw Bounding Box Target Box</strong>
+                  <p>Overlay a green/red box around moving objects in real-time video.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="chkDrawBoxes" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="glass-card settings-card">
+            <div class="card-header">
+              <h3><i data-lucide="video"></i> Auto-Recording & Cooldown</h3>
+            </div>
+            <div class="settings-body">
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Auto-Record on Motion</strong>
+                  <p>Automatically record video & audio clips when motion is detected.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="chkAutoRecord" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Post-Motion Buffer Cooldown (Sec)</strong>
+                  <p>How many seconds to keep recording after motion stops.</p>
+                </div>
+                <div class="setting-control">
+                  <input type="range" id="inputRecordCooldown" min="2" max="30" value="5">
+                  <span class="range-val" id="valRecordCooldown">5s</span>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Max Single Clip Duration (Sec)</strong>
+                  <p>Automatically save clip and start a new clip if motion persists.</p>
+                </div>
+                <div class="setting-control">
+                  <input type="range" id="inputMaxClipLen" min="10" max="300" value="60">
+                  <span class="range-val" id="valMaxClipLen">60s</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="glass-card settings-card">
+            <div class="card-header">
+              <h3><i data-lucide="bell"></i> Sound & Siren Alerts</h3>
+            </div>
+            <div class="settings-body">
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Audible Siren / Alert Chime</strong>
+                  <p>Play alarm sound through speakers when motion occurs.</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="chkAudioAlarm" checked>
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Audio Noise Trigger Threshold</strong>
+                  <p>Trigger alert on sudden loud room noises.</p>
+                </div>
+                <div class="setting-control">
+                  <input type="range" id="inputAudioThreshold" min="10" max="95" value="40">
+                  <span class="range-val" id="valAudioThreshold">40%</span>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-label">
+                  <strong>Alarm Sound Tone</strong>
+                  <p>Select synthesizer tone pattern.</p>
+                </div>
+                <div class="setting-control">
+                  <select id="selectSirenSound" class="select-input">
+                    <option value="siren">Police Siren (High Warning)</option>
+                    <option value="pulse">Cyber Beep Pulse</option>
+                    <option value="chime">Subtle Ping Chime</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- TAB 3: CLIPS LIBRARY -->
+      <section id="tabClips" class="tab-pane">
+        <div class="clips-header-bar">
+          <div class="storage-info">
+            <div class="storage-icon"><i data-lucide="hard-drive"></i></div>
+            <div class="storage-text">
+              <span class="storage-title">Local Clip Storage (IndexedDB)</span>
+              <span id="storageStatsText" class="storage-sub">0 clips (0 MB used)</span>
+            </div>
+          </div>
+          <div class="clips-actions">
+            <button id="btnRefreshClips" class="btn btn-secondary"><i data-lucide="refresh-cw"></i> Refresh</button>
+            <button id="btnClearAllClips" class="btn btn-danger"><i data-lucide="trash-2"></i> Delete All Clips</button>
+          </div>
+        </div>
+
+        <!-- Clips Grid -->
+        <div id="clipsGrid" class="clips-grid">
+          <div class="empty-state">
+            <i data-lucide="film"></i>
+            <h3>No Security Recordings Yet</h3>
+            <p>Clips will automatically appear here when motion is detected or when you hit Record.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: REMOTE ACCESS (INTERNET & CELLULAR) -->
+      <section id="tabRemote" class="tab-pane">
+        <div class="remote-grid">
+
+          <!-- QR Code & Setup Card -->
+          <div class="glass-card remote-card">
+            <div class="card-header">
+              <h3><i data-lucide="globe"></i> Global Internet Remote View</h3>
+            </div>
+            <div class="remote-body">
+              <div class="qr-wrapper">
+                <img id="imgQrCode" src="" alt="Remote Access QR Code" class="qr-img">
+                <div id="qrLoading" class="qr-loading">Generating Security QR...</div>
+              </div>
+
+              <div class="remote-info-box">
+                <div class="info-row">
+                  <span class="label">Global Camera ID:</span>
+                  <span id="displayGlobalCamId" class="pin-badge">123456cam123456cam</span>
+                </div>
+                <div class="info-row" style="margin-top: 10px;">
+                  <span class="label">Custom Website Stream Link:</span>
+                  <code id="kfadUrlText" class="code-link">https://kfadapps.com/?cam=123456cam123456cam</code>
+                  <button id="btnCopyKfadUrl" class="btn-icon-small" title="Copy Website Link"><i data-lucide="copy"></i></button>
+                </div>
+                <div class="info-row" style="margin-top: 6px;">
+                  <span class="label">Direct App Access Link:</span>
+                  <code id="remoteUrlText" class="code-link">http://...</code>
+                  <button id="btnCopyRemoteUrl" class="btn-icon-small" title="Copy Link"><i data-lucide="copy"></i></button>
+                </div>
+              </div>
+
+              <div class="remote-instructions">
+                <h4><i data-lucide="wifi"></i> Streaming over Cellular & Internet (No Wi-Fi Needed):</h4>
+                <ol>
+                  <li>Your camera host streams directly via <strong>PeerJS & Google STUN Relays</strong> across any cellular (4G/5G) or remote internet connection.</li>
+                  <li>Scan the QR code or open <code>https://kfadapps.com/?cam=123456cam123456cam</code> on your phone.</li>
+                  <li>You can view live HD camera video and receive motion alerts anywhere in the world!</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <!-- Connected Clients Status -->
+          <div class="glass-card remote-card">
+            <div class="card-header">
+              <h3><i data-lucide="activity"></i> WebRTC Peer Connection Status</h3>
+            </div>
+            <div class="remote-body">
+              <div class="connection-status-card">
+                <div class="conn-icon" id="wsConnIcon" style="background: rgba(16, 185, 129, 0.2); color: var(--accent-green);"><i data-lucide="globe"></i></div>
+                <div class="conn-details">
+                  <h4 id="wsConnTitle">Global PeerJS Internet Relay Connected</h4>
+                  <p id="wsConnDesc">Ready to stream over 4G/5G cellular & internet</p>
+                </div>
+              </div>
+
+              <div class="connected-remotes-list" style="margin-top: 20px;">
+                <h4>Active Internet Connections (<span id="connectedCount">0</span>)</h4>
+                <ul id="remoteClientsList" class="remote-list">
+                  <li class="empty-list" id="remoteListStatusText">Waiting for remote internet connections...</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- REMOTE VIEWER STANDALONE VIEW (Active when URL has ?mode=remote or ?cam=...) -->
+      <section id="viewRemoteClient" class="remote-client-layout hidden">
+        <header class="remote-client-header">
+          <div class="brand">
+            <i data-lucide="shield"></i>
+            <h2>AEGISCAM <span>GLOBAL REMOTE VIEW</span></h2>
+          </div>
+          <div id="remoteClientStatus" class="status-pill status-ready">
+            <span class="status-dot"></span> <span id="remoteStatusText">CONNECTING...</span>
+          </div>
+        </header>
+
+        <div class="remote-stream-container" style="position: relative;">
+          <!-- MUTED VIDEO PLAYER FOR UNBLOCKED AUTOPLAY -->
+          <video id="remoteVideoPlayer" autoplay playsinline muted controls style="width: 100%; height: 100%; object-fit: contain;"></video>
+          <img id="remoteSnapshotCanvas" src="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; z-index: 2;">
+          
+          <div id="remoteStreamPlaceholder" class="stream-placeholder">
+            <i data-lucide="wifi"></i>
+            <h3>Connecting to Camera Stream...</h3>
+            <p>Connecting globally via PeerJS & STUN Relays. Ensure camera host PC is powered on.</p>
+          </div>
+        </div>
+
+        <!-- Remote Controls Footer -->
+        <div class="remote-actions-bar">
+          <button id="btnUnmuteAudio" class="btn btn-secondary btn-lg">
+            <i data-lucide="volume-2"></i> Unmute Sound
+          </button>
+          <button id="btnRemoteSiren" class="btn btn-danger btn-lg">
+            <i data-lucide="bell-ring"></i> Trigger Siren
+          </button>
+          <button id="btnRemoteSnap" class="btn btn-primary btn-lg">
+            <i data-lucide="aperture"></i> Take Snapshot
+          </button>
+        </div>
+
+        <!-- Remote Alert Feed -->
+        <div class="remote-alert-feed">
+          <h4>Remote Alert Activity</h4>
+          <div id="remoteAlertList" class="alert-list">
+            <div class="alert-item info">Connecting to global WebRTC stream feed...</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/storage.js"></script>
+  <script src="js/motionEngine.js"></script>
+  <script src="js/recorder.js"></script>
+  <script src="js/remoteEngine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

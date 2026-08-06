@@ -1,0 +1,15 @@
+{
+  "name": "aegiscam-security-system",
+  "version": "1.0.0",
+  "description": "Webcam security system with motion detection, video/audio recording, and remote viewing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3",
+    "ws": "^8.17.0"
+  }
+}
